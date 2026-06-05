@@ -90,7 +90,7 @@
 @if (session('success'))
     <script>
         setTimeout(function () {
-            window.location.href = "{{ route('voertuigen.index') }}";
+            window.location.href = "{{ route('instructeurs.voertuigen', $instructeur->Id) }}";
         }, 3000);
     </script>
 @endif

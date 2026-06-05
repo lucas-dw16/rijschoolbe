@@ -89,7 +89,7 @@ class RijschoolDataRepository
             })
             ->join('TypeVoertuig as tv', 'tv.Id', '=', 'v.TypeVoertuigId')
             ->where('v.IsActief', 1)
-            ->orderBy('tv.Rijbewijscategorie')
+            ->orderByDesc('tv.Rijbewijscategorie')
             ->orderBy('v.Type')
             ->select([
                 'v.Id',
