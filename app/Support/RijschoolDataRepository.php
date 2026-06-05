@@ -269,6 +269,101 @@ class RijschoolDataRepository
         return $this->voertuigInstructeurId($voertuigId);
     }
 
+    public function paginateAllVoertuigen(int $perPage = self::PER_PAGE): LengthAwarePaginator
+    {
+        $voertuigen = DB::table('Voertuig as v')
+            ->leftJoin('VoertuigInstructeur as vi', function ($join): void {
+                $join->on('vi.VoertuigId', '=', 'v.Id')
+                    ->where('vi.IsActief', '=', 1);
+            })
+            ->leftJoin('Instructeur as i', 'i.Id', '=', 'vi.InstructeurId')
+            ->leftJoin('TypeVoertuig as tv', 'tv.Id', '=', 'v.TypeVoertuigId')
+            ->where('v.IsActief', 1)
+            ->orderByDesc('v.Bouwjaar')
+            ->orderByDesc('i.Achternaam')
+            ->select([
+                'v.Id',
+                'v.Kenteken',
+                'v.Type',
+                'v.Bouwjaar',
+                'v.Brandstof',
+                'v.TypeVoertuigId',
+                'v.IsActief',
+                'v.Opmerking',
+                'v.DatumAangemaakt',
+                'v.DatumGewijzigd',
+                'tv.TypeVoertuig',
+                'tv.Rijbewijscategorie',
+                'vi.InstructeurId',
+                DB::raw("CONCAT_WS(' ', i.Voornaam, NULLIF(i.Tussenvoegsel, ''), i.Achternaam) AS InstructeurNaam"),
+            ])
+            ->get()
+            ->map(fn (object $voertuig): object => $this->hydrateVoertuig($voertuig))
+            ->values();
+
+        return $this->paginateCollection($voertuigen, $perPage, 'page');
+    }
+
+    public function removeAssignment(int $voertuigId): bool
+    {
+        return DB::transaction(function () use ($voertuigId): bool {
+            $assignment = DB::table('VoertuigInstructeur')
+                ->where('VoertuigId', $voertuigId)
+                ->where('IsActief', 1)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $assignment) {
+                return false;
+            }
+
+            $now = $this->now();
+
+            DB::table('VoertuigInstructeur')
+                ->where('Id', $assignment->Id)
+                ->update([
+                    'IsActief' => 0,
+                    'DatumGewijzigd' => $now->format('Y-m-d H:i:s.u'),
+                ]);
+
+            return true;
+        });
+    }
+
+    public function deactivateVoertuig(int $voertuigId): bool
+    {
+        return DB::transaction(function () use ($voertuigId): bool {
+            $voertuig = DB::table('Voertuig')
+                ->where('Id', $voertuigId)
+                ->where('IsActief', 1)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $voertuig) {
+                return false;
+            }
+
+            $now = $this->now();
+
+            DB::table('Voertuig')
+                ->where('Id', $voertuigId)
+                ->update([
+                    'IsActief' => 0,
+                    'DatumGewijzigd' => $now->format('Y-m-d H:i:s.u'),
+                ]);
+
+            DB::table('VoertuigInstructeur')
+                ->where('VoertuigId', $voertuigId)
+                ->where('IsActief', 1)
+                ->update([
+                    'IsActief' => 0,
+                    'DatumGewijzigd' => $now->format('Y-m-d H:i:s.u'),
+                ]);
+
+            return true;
+        });
+    }
+
     private function hydrateInstructeur(object $instructeur): object
     {
         $instructeur->Naam = $this->formatNaam(
@@ -287,14 +382,21 @@ class RijschoolDataRepository
 
     private function hydrateVoertuig(object $voertuig): object
     {
-        if ((int) ($voertuig->InstructeurId ?? 0) === 0) {
+        $instructeurId = (int) ($voertuig->InstructeurId ?? 0);
+
+        if ($instructeurId === 0) {
+            $voertuig->InstructeurId = $this->voertuigInstructeurId((int) $voertuig->Id);
+            $instructeurId = (int) ($voertuig->InstructeurId ?? 0);
+        }
+
+        if ($instructeurId === 0) {
             $voertuig->InstructeurNaam = null;
 
             return $voertuig;
         }
 
-        if (! property_exists($voertuig, 'InstructeurNaam') || $voertuig->InstructeurNaam === '') {
-            $voertuig->InstructeurNaam = $this->instructeurNaamById((int) $voertuig->InstructeurId);
+        if (! property_exists($voertuig, 'InstructeurNaam') || trim((string) $voertuig->InstructeurNaam) === '') {
+            $voertuig->InstructeurNaam = $this->instructeurNaamById($instructeurId);
         }
 
         return $voertuig;
@@ -322,7 +424,7 @@ class RijschoolDataRepository
             : null;
     }
 
-    private function formatNaam(string $voornaam, ?string $tussenvoegsel, string $achternaam): string
+    public function formatNaam(string $voornaam, ?string $tussenvoegsel, string $achternaam): string
     {
         return trim(implode(' ', array_filter([$voornaam, $tussenvoegsel, $achternaam], fn (?string $part): bool => filled($part))));
     }

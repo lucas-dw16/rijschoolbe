@@ -6,6 +6,7 @@ use App\Support\RijschoolDataRepository;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class InstructeurVoertuigController extends Controller
@@ -47,6 +48,59 @@ class InstructeurVoertuigController extends Controller
             'instructeur' => $instructeurModel,
             'voertuigen' => $this->repository->paginateBeschikbareVoertuigen(4),
         ]);
+    }
+
+    public function all(): View
+    {
+        return view('voertuigen.index', [
+            'title' => 'Alle voertuigen',
+            'voertuigen' => $this->repository->paginateAllVoertuigen(4),
+        ]);
+    }
+
+    public function removeAssignment(Request $request, int $instructeur, int $voertuig): RedirectResponse
+    {
+        try {
+            $ok = $this->repository->removeAssignment($voertuig);
+
+            if (! $ok) {
+                return back()->with('error', 'Het geselecteerde voertuig kon niet worden verwijderd.');
+            }
+
+            return redirect()->route('instructeurs.voertuigen', $instructeur)->with('success', 'Het door u geselecteerde voertuig is verwijderd');
+        } catch (\Throwable $e) {
+            Log::error('Verwijderen toewijzing mislukt', ['voertuig' => $voertuig, 'instructeur' => $instructeur, 'message' => $e->getMessage()]);
+
+            return back()->with('error', 'Het door u geselecteerde voertuig kon niet worden verwijderd.');
+        }
+    }
+
+    public function destroy(int $voertuig): RedirectResponse
+    {
+        try {
+            $record = DB::table('Voertuig')->where('Id', $voertuig)->first();
+
+            $assignment = DB::table('VoertuigInstructeur')
+                ->where('VoertuigId', $voertuig)
+                ->where('IsActief', 1)
+                ->first();
+
+            if (! $record || (int) $record->IsActief === 0 || ! $assignment) {
+                return back()->with('error', 'Het door u geselecteerde voertuig staat op non actief en kan niet worden verwijderd');
+            }
+
+            $ok = $this->repository->deactivateVoertuig($voertuig);
+
+            if (! $ok) {
+                return back()->with('error', 'Het door u geselecteerde voertuig kon niet worden verwijderd.');
+            }
+
+            return redirect()->route('voertuigen.index')->with('success', 'Het door u geselecteerde voertuig is verwijderd');
+        } catch (\Throwable $e) {
+            Log::error('Voertuig verwijderen mislukt', ['voertuig' => $voertuig, 'message' => $e->getMessage()]);
+
+            return back()->with('error', 'Het door u geselecteerde voertuig kon niet worden verwijderd.');
+        }
     }
 
     public function assign(Request $request, int $instructeur, int $voertuig): RedirectResponse

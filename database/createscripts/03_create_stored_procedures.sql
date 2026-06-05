@@ -219,3 +219,28 @@ BEGIN
 END$$
 
 DELIMITER ;
+
+DELIMITER $$
+
+CREATE PROCEDURE sp_RemoveVoertuigAssignment(IN p_voertuig_id INT)
+BEGIN
+    UPDATE VoertuigInstructeur
+    SET IsActief = 0,
+        DatumGewijzigd = SYSDATE(6)
+    WHERE VoertuigId = p_voertuig_id AND IsActief = 1;
+END$$
+
+CREATE PROCEDURE sp_DeactivateVoertuig(IN p_voertuig_id INT)
+BEGIN
+    UPDATE Voertuig
+    SET IsActief = 0,
+        DatumGewijzigd = SYSDATE(6)
+    WHERE Id = p_voertuig_id AND IsActief = 1;
+
+    UPDATE VoertuigInstructeur
+    SET IsActief = 0,
+        DatumGewijzigd = SYSDATE(6)
+    WHERE VoertuigId = p_voertuig_id AND IsActief = 1;
+END$$
+
+DELIMITER ;

@@ -20,6 +20,10 @@
                         {{ __('Instructeurs in dienst') }}
                     </flux:sidebar.item>
 
+                    <flux:sidebar.item icon="layout-grid" :href="route('voertuigen.index')" :current="request()->routeIs('voertuigen.*')" wire:navigate>
+                        {{ __('Alle voertuigen') }}
+                    </flux:sidebar.item>
+
                     <flux:sidebar.item icon="plus" :href="route('instructeurs.beschikbare-voertuigen', 5)" :current="request()->routeIs('instructeurs.beschikbare-voertuigen')" wire:navigate>
                         {{ __('Toevoegen voertuig') }}
                     </flux:sidebar.item>

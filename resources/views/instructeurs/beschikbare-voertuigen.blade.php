@@ -5,7 +5,27 @@
                 <h1 class="text-3xl font-semibold tracking-tight text-zinc-900 dark:text-white">Alle beschikbare voertuigen</h1>
                 <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Koppel voertuigen aan {{ $instructeur->Naam }} of wijzig eerst de voertuiggegevens.</p>
             </div>
+        @if (session('success'))
+            <div class="mb-4 w-full rounded-none border border-emerald-700 bg-emerald-700 px-4 py-3 text-center text-lg font-semibold text-white">
+                <div class="flex items-center justify-center gap-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0 text-white" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M16.704 5.29a1 1 0 010 1.414l-7.31 7.31a1 1 0 01-1.414 0l-3.09-3.09a1 1 0 011.414-1.414l2.383 2.383 6.603-6.603a1 1 0 011.414 0z" clip-rule="evenodd" />
+                    </svg>
+                    <span>{{ session('success') }}</span>
+                </div>
+            </div>
+        @endif
 
+        @if (session('error'))
+            <div class="mb-4 w-full rounded-none border border-rose-700 bg-rose-700 px-4 py-3 text-center text-lg font-semibold text-white">
+                <div class="flex items-center justify-center gap-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0 text-white" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v3a1 1 0 002 0V7zm-1 7a1.25 1.25 0 110-2.5A1.25 1.25 0 0110 14z" clip-rule="evenodd" />
+                    </svg>
+                    <span>{{ session('error') }}</span>
+                </div>
+            </div>
+        @endif
             <a href="{{ route('instructeurs.voertuigen', $instructeur->Id) }}" class="inline-flex items-center justify-center rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800" wire:navigate>
                 Terug naar voertuigen
             </a>

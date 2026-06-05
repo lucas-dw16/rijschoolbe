@@ -15,6 +15,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('voertuigen/{voertuig}/wijzigen', [InstructeurVoertuigController::class, 'edit'])->name('voertuigen.edit');
     Route::put('voertuigen/{voertuig}', [InstructeurVoertuigController::class, 'update'])->name('voertuigen.update');
+    Route::get('voertuigen', [InstructeurVoertuigController::class, 'all'])->name('voertuigen.index');
+    Route::delete('voertuigen/{voertuig}', [InstructeurVoertuigController::class, 'destroy'])->name('voertuigen.destroy');
+
+    Route::delete('instructeurs/{instructeur}/voertuigen/{voertuig}', [InstructeurVoertuigController::class, 'removeAssignment'])->name('instructeurs.voertuigen.destroy');
 });
 
 require __DIR__.'/settings.php';
