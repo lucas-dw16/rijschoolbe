@@ -17,13 +17,35 @@ class InstructeurVoertuigController extends Controller
 
     public function index(): View
     {
-        $instructeurs = $this->repository->paginateInstructeurs(4);
+        $instructeurs = $this->repository->paginateInstructeursWithStatus(4);
 
         return view('dashboard', [
             'title' => 'Instructeurs in dienst',
             'instructeurs' => $instructeurs,
             'aantalInstructeurs' => $instructeurs->total(),
         ]);
+    }
+
+    public function toggleInstructeurStatus(int $instructeur): RedirectResponse
+    {
+        try {
+            $updated = $this->repository->toggleInstructeurActief($instructeur);
+
+            abort_if(! $updated, 404);
+
+            $message = (bool) $updated->IsActief
+                ? "Instructeur {$updated->Voornaam} {$updated->Achternaam} is beter/terug van verlof gemeld"
+                : "Instructeur {$updated->Voornaam} {$updated->Achternaam} is ziek/met verlof gemeld";
+
+            return redirect()->route('dashboard')->with('success', $message);
+        } catch (\Throwable $exception) {
+            Log::error('Status instructeur wisselen mislukt', [
+                'instructeur_id' => $instructeur,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return back()->with('error', 'De status van de instructeur kon niet worden gewijzigd.');
+        }
     }
 
     public function show(int $instructeur): View
@@ -106,13 +128,25 @@ class InstructeurVoertuigController extends Controller
     public function assign(Request $request, int $instructeur, int $voertuig): RedirectResponse
     {
         try {
+            // detect if this is a restore of a voertuig that had been marked 'tijdelijk_verlof' for this instructeur
+            $wasDuringAbsence = 
+                \Illuminate\Support\Facades\DB::table('VoertuigInstructeur')
+                    ->where('VoertuigId', $voertuig)
+                    ->where('InstructeurId', $instructeur)
+                    ->where('Opmerking', 'tijdelijk_verlof')
+                    ->exists();
+
             $voertuigModel = $this->repository->assignVoertuigToInstructeur($voertuig, $instructeur);
 
             abort_if(! $voertuigModel, 404);
 
+            $message = $wasDuringAbsence
+                ? sprintf('Het geselecteerde voertuig is weer toegewezen aan %s', $this->repository->getInstructeur($instructeur)->Naam)
+                : 'Voertuig succesvol toegewezen.';
+
             return redirect()
                 ->route('instructeurs.voertuigen', $instructeur)
-                ->with('success', 'Voertuig succesvol toegewezen.');
+                ->with('success', $message);
         } catch (\Throwable $exception) {
             Log::error('Voertuig toewijzen mislukt', [
                 'instructeur_id' => $instructeur,

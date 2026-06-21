@@ -11,6 +11,18 @@ class RijschoolDataRepository
 {
     private const PER_PAGE = 4;
 
+    public function paginateInstructeursWithStatus(int $perPage = self::PER_PAGE): LengthAwarePaginator
+    {
+        $instructeurs = DB::table('Instructeur')
+            ->orderByDesc('AantalSterren')
+            ->orderBy('Id')
+            ->get()
+            ->map(fn (object $instructeur): object => $this->hydrateInstructeur($instructeur))
+            ->values();
+
+        return $this->paginateCollection($instructeurs, $perPage, 'page');
+    }
+
     public function allInstructeurs(): Collection
     {
         return DB::table('Instructeur')
@@ -31,7 +43,6 @@ class RijschoolDataRepository
     {
         $instructeur = DB::table('Instructeur')
             ->where('Id', $instructeurId)
-            ->where('IsActief', 1)
             ->first();
 
         return $instructeur ? $this->hydrateInstructeur($instructeur) : null;
@@ -81,13 +92,25 @@ class RijschoolDataRepository
 
     public function paginateVoertuigenVanInstructeur(int $instructeurId, int $perPage = self::PER_PAGE): LengthAwarePaginator
     {
+        // If the instructeur is not active, they should not see any assigned vehicles
+        $isActief = DB::table('Instructeur')->where('Id', $instructeurId)->where('IsActief', 1)->exists();
+        if (! $isActief) {
+            return $this->paginateCollection(collect([]), $perPage, 'page');
+        }
+
         $voertuigen = DB::table('Voertuig as v')
-            ->join('VoertuigInstructeur as vi', function ($join) use ($instructeurId): void {
-                $join->on('vi.VoertuigId', '=', 'v.Id')
-                    ->where('vi.IsActief', '=', 1)
-                    ->where('vi.InstructeurId', '=', $instructeurId);
+            ->whereExists(function ($query) use ($instructeurId): void {
+                $query->selectRaw('1')
+                    ->from('VoertuigInstructeur as historie')
+                    ->whereColumn('historie.VoertuigId', 'v.Id')
+                    ->where('historie.InstructeurId', $instructeurId);
             })
             ->join('TypeVoertuig as tv', 'tv.Id', '=', 'v.TypeVoertuigId')
+            ->leftJoin('VoertuigInstructeur as vi_huidig', function ($join): void {
+                $join->on('vi_huidig.VoertuigId', '=', 'v.Id')
+                    ->where('vi_huidig.IsActief', '=', 1);
+            })
+            ->leftJoin('Instructeur as i_huidig', 'i_huidig.Id', '=', 'vi_huidig.InstructeurId')
             ->where('v.IsActief', 1)
             ->orderByDesc('tv.Rijbewijscategorie')
             ->orderBy('v.Type')
@@ -104,10 +127,11 @@ class RijschoolDataRepository
                 'v.DatumGewijzigd',
                 'tv.TypeVoertuig',
                 'tv.Rijbewijscategorie',
-                'vi.InstructeurId',
+                'vi_huidig.InstructeurId as HuidigeInstructeurId',
+                DB::raw("CONCAT_WS(' ', i_huidig.Voornaam, NULLIF(i_huidig.Tussenvoegsel, ''), i_huidig.Achternaam) AS HuidigeInstructeurNaam"),
             ])
             ->get()
-            ->map(fn (object $voertuig): object => $this->hydrateVoertuig($voertuig))
+            ->map(fn (object $voertuig): object => $this->hydrateVoertuigForInstructeur($voertuig, $instructeurId))
             ->values();
 
         return $this->paginateCollection($voertuigen, $perPage, 'page');
@@ -181,13 +205,94 @@ class RijschoolDataRepository
                 DB::table('VoertuigInstructeur')
                     ->where('Id', $assignment->Id)
                     ->update([
-                        'InstructeurId' => $instructeurId,
+                        'IsActief' => 0,
                         'DatumGewijzigd' => $now->format('Y-m-d H:i:s.u'),
                     ]);
+
+                DB::table('VoertuigInstructeur')->insert([
+                    'VoertuigId' => $voertuigId,
+                    'InstructeurId' => $instructeurId,
+                    'DatumToekenning' => $now->format('Y-m-d'),
+                    'IsActief' => 1,
+                    'Opmerking' => null,
+                    'DatumAangemaakt' => $now->format('Y-m-d H:i:s.u'),
+                    'DatumGewijzigd' => $now->format('Y-m-d H:i:s.u'),
+                ]);
             }
 
             return $this->getVoertuig($voertuigId);
         });
+    }
+
+    public function toggleInstructeurActief(int $instructeurId): ?object
+    {
+        return DB::transaction(function () use ($instructeurId): ?object {
+            $instructeur = DB::table('Instructeur')
+                ->where('Id', $instructeurId)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $instructeur) {
+                return null;
+            }
+
+            $now = $this->now();
+            $nieuwIsActief = ! (bool) $instructeur->IsActief;
+
+            DB::table('Instructeur')
+                ->where('Id', $instructeurId)
+                ->update([
+                    'IsActief' => $nieuwIsActief ? 1 : 0,
+                    'DatumGewijzigd' => $now->format('Y-m-d H:i:s.u'),
+                ]);
+
+            if (! $nieuwIsActief) {
+                DB::table('VoertuigInstructeur')
+                    ->where('InstructeurId', $instructeurId)
+                    ->where('IsActief', 1)
+                    ->update([
+                        'IsActief' => 0,
+                        'Opmerking' => 'tijdelijk_verlof',
+                        'DatumGewijzigd' => $now->format('Y-m-d H:i:s.u'),
+                    ]);
+            }
+            else {
+                // Re-activate previously held assignments only if the voertuig is still free
+                $previousAssignments = DB::table('VoertuigInstructeur')
+                    ->where('InstructeurId', $instructeurId)
+                    ->where('IsActief', 0)
+                    ->where('Opmerking', 'tijdelijk_verlof')
+                    ->get();
+
+                foreach ($previousAssignments as $pa) {
+                    $conflict = DB::table('VoertuigInstructeur')
+                        ->where('VoertuigId', $pa->VoertuigId)
+                        ->where('IsActief', 1)
+                        ->exists();
+
+                    if (! $conflict) {
+                        DB::table('VoertuigInstructeur')
+                            ->where('Id', $pa->Id)
+                            ->update([
+                                'IsActief' => 1,
+                                'Opmerking' => null,
+                                'DatumGewijzigd' => $now->format('Y-m-d H:i:s.u'),
+                            ]);
+                    }
+                }
+            }
+
+            return $this->getInstructeurWithStatus($instructeurId);
+        });
+    }
+
+    public function getInstructeurWithStatus(int $instructeurId): ?object
+    {
+        $instructeur = DB::table('Instructeur')
+            ->where('Id', $instructeurId)
+            ->first();
+
+        return $instructeur ? $this->hydrateInstructeur($instructeur) : null;
     }
 
     public function updateVoertuig(int $voertuigId, array $payload): ?object
@@ -250,13 +355,23 @@ class RijschoolDataRepository
                         'DatumAangemaakt' => $now->format('Y-m-d H:i:s.u'),
                         'DatumGewijzigd' => $now->format('Y-m-d H:i:s.u'),
                     ]);
-                } else {
+                } elseif ((int) $assignment->InstructeurId !== $selectedInstructeurId) {
                     DB::table('VoertuigInstructeur')
                         ->where('Id', $assignment->Id)
                         ->update([
-                            'InstructeurId' => $selectedInstructeurId,
+                            'IsActief' => 0,
                             'DatumGewijzigd' => $now->format('Y-m-d H:i:s.u'),
                         ]);
+
+                    DB::table('VoertuigInstructeur')->insert([
+                        'VoertuigId' => $voertuigId,
+                        'InstructeurId' => $selectedInstructeurId,
+                        'DatumToekenning' => $now->format('Y-m-d'),
+                        'IsActief' => 1,
+                        'Opmerking' => null,
+                        'DatumAangemaakt' => $now->format('Y-m-d H:i:s.u'),
+                        'DatumGewijzigd' => $now->format('Y-m-d H:i:s.u'),
+                    ]);
                 }
             }
 
@@ -402,6 +517,22 @@ class RijschoolDataRepository
         return $voertuig;
     }
 
+    private function hydrateVoertuigForInstructeur(object $voertuig, int $instructeurId): object
+    {
+        $voertuig = $this->hydrateVoertuig($voertuig);
+
+        // Was this voertuig marked temporarily during this instructeur's absence?
+        $wasDuringAbsence = DB::table('VoertuigInstructeur')
+            ->where('VoertuigId', $voertuig->Id)
+            ->where('InstructeurId', $instructeurId)
+            ->where('Opmerking', 'tijdelijk_verlof')
+            ->exists();
+
+        $voertuig->WasAssignedDuringAbsence = $wasDuringAbsence;
+
+        return $voertuig;
+    }
+
     private function voertuigInstructeurId(int $voertuigId): ?int
     {
         $assignment = DB::table('VoertuigInstructeur')
@@ -416,7 +547,6 @@ class RijschoolDataRepository
     {
         $instructeur = DB::table('Instructeur')
             ->where('Id', $instructeurId)
-            ->where('IsActief', 1)
             ->first();
 
         return $instructeur

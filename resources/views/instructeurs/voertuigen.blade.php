@@ -38,6 +38,7 @@
                 <table class="min-w-full border-separate border-spacing-0">
                     <thead>
                         <tr class="bg-zinc-100 dark:bg-zinc-800">
+                            <th class="border-b border-zinc-300 px-4 py-3 text-center text-sm font-semibold text-zinc-900 dark:border-zinc-700 dark:text-zinc-100">Toegewezen</th>
                             <th class="border-b border-zinc-300 px-4 py-3 text-left text-sm font-semibold text-zinc-900 dark:border-zinc-700 dark:text-zinc-100">TypeVoertuig</th>
                             <th class="border-b border-zinc-300 px-4 py-3 text-left text-sm font-semibold text-zinc-900 dark:border-zinc-700 dark:text-zinc-100">Type</th>
                             <th class="border-b border-zinc-300 px-4 py-3 text-left text-sm font-semibold text-zinc-900 dark:border-zinc-700 dark:text-zinc-100">Kenteken</th>
@@ -51,6 +52,30 @@
                     <tbody>
                         @forelse ($voertuigen as $voertuig)
                             <tr class="hover:bg-zinc-50 dark:hover:bg-zinc-800/60">
+                                <td class="border-b border-zinc-200 px-4 py-3 text-center text-sm dark:border-zinc-800">
+                                    @php
+                                        $huidig = filled($voertuig->HuidigeInstructeurId) ? (int) $voertuig->HuidigeInstructeurId : null;
+                                    @endphp
+
+                                    {{-- Green check when currently assigned to this instructor --}}
+                                    @if ($huidig !== null && $huidig === (int) $instructeur->Id)
+                                        <span class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-300 bg-emerald-50 text-lg text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">✓</span>
+
+                                    {{-- Red cross when the vehicle was reassigned during absence (currently assigned to someone else) --}}
+                                    @elseif (! empty($voertuig->WasAssignedDuringAbsence) && $huidig !== null && $huidig !== (int) $instructeur->Id)
+                                        <form action="{{ route('instructeurs.voertuigen.assign', [$instructeur->Id, $voertuig->Id]) }}" method="POST">
+                                            @csrf
+                                            <button type="submit" class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-rose-300 bg-rose-50 text-lg text-rose-700 shadow-sm transition hover:bg-rose-100 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-300 dark:hover:bg-rose-900" title="Herstel toewijzing aan {{ $instructeur->Naam }}">✕</button>
+                                        </form>
+
+                                    {{-- Otherwise show assign option --}}
+                                    @else
+                                        <form action="{{ route('instructeurs.voertuigen.assign', [$instructeur->Id, $voertuig->Id]) }}" method="POST">
+                                            @csrf
+                                            <button type="submit" class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-rose-300 bg-rose-50 text-lg text-rose-700 shadow-sm transition hover:bg-rose-100 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-300 dark:hover:bg-rose-900" title="Toewijzen aan {{ $instructeur->Naam }}">✕</button>
+                                        </form>
+                                    @endif
+                                </td>
                                 <td class="border-b border-zinc-200 px-4 py-3 text-sm text-zinc-700 dark:border-zinc-800 dark:text-zinc-200">{{ $voertuig->TypeVoertuig }}</td>
                                 <td class="border-b border-zinc-200 px-4 py-3 text-sm text-zinc-700 dark:border-zinc-800 dark:text-zinc-200">{{ $voertuig->Type }}</td>
                                 <td class="border-b border-zinc-200 px-4 py-3 text-sm text-zinc-700 dark:border-zinc-800 dark:text-zinc-200">{{ $voertuig->Kenteken }}</td>
@@ -74,7 +99,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7" class="px-4 py-10 text-center text-sm text-zinc-500 dark:text-zinc-400">Geen voertuigen toegewezen aan {{ $instructeur->Naam }}.</td>
+                                <td colspan="8" class="px-4 py-10 text-center text-sm text-zinc-500 dark:text-zinc-400">Geen voertuigen toegewezen aan {{ $instructeur->Naam }}.</td>
                             </tr>
                         @endforelse
                     </tbody>

@@ -8,6 +8,8 @@ DROP PROCEDURE IF EXISTS sp_GetVoertuigenVanInstructeur;
 DROP PROCEDURE IF EXISTS sp_GetBeschikbareVoertuigen;
 DROP PROCEDURE IF EXISTS sp_AssignVoertuigToInstructeur;
 DROP PROCEDURE IF EXISTS sp_UpdateVoertuig;
+DROP PROCEDURE IF EXISTS sp_SetInstructeurActief;
+DROP PROCEDURE IF EXISTS sp_ToggleInstructeurActief;
 
 DELIMITER $$
 
@@ -216,6 +218,35 @@ BEGIN
     END IF;
 
     SELECT * FROM Voertuig WHERE Id = p_id;
+END$$
+
+CREATE PROCEDURE sp_SetInstructeurActief(
+    IN p_instructeur_id INT,
+    IN p_is_actief BIT
+)
+BEGIN
+    UPDATE Instructeur
+    SET IsActief = p_is_actief,
+        DatumGewijzigd = SYSDATE(6)
+    WHERE Id = p_instructeur_id;
+
+    IF p_is_actief = 0 THEN
+        UPDATE VoertuigInstructeur
+        SET IsActief = 0,
+            DatumGewijzigd = SYSDATE(6)
+        WHERE InstructeurId = p_instructeur_id AND IsActief = 1;
+    END IF;
+
+    SELECT * FROM Instructeur WHERE Id = p_instructeur_id;
+END$$
+
+CREATE PROCEDURE sp_ToggleInstructeurActief(IN p_instructeur_id INT)
+BEGIN
+    IF EXISTS (SELECT 1 FROM Instructeur WHERE Id = p_instructeur_id AND IsActief = 1) THEN
+        CALL sp_SetInstructeurActief(p_instructeur_id, 0);
+    ELSE
+        CALL sp_SetInstructeurActief(p_instructeur_id, 1);
+    END IF;
 END$$
 
 DELIMITER ;

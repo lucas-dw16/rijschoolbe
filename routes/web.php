@@ -8,6 +8,7 @@ Route::view('/', 'welcome')->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', [InstructeurVoertuigController::class, 'index'])->name('dashboard');
+    Route::patch('instructeurs/{instructeur}/status', [InstructeurVoertuigController::class, 'toggleInstructeurStatus'])->name('instructeurs.status');
 
     Route::get('instructeurs/{instructeur}/voertuigen', [InstructeurVoertuigController::class, 'show'])->name('instructeurs.voertuigen');
     Route::get('instructeurs/{instructeur}/voertuigen/beschikbaar', [InstructeurVoertuigController::class, 'available'])->name('instructeurs.beschikbare-voertuigen');

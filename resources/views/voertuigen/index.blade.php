@@ -55,6 +55,7 @@
                             <th class="border-b border-zinc-300 px-4 py-3 text-left text-sm font-semibold text-zinc-900 dark:border-zinc-700 dark:text-zinc-100">Brandstof</th>
                             <th class="border-b border-zinc-300 px-4 py-3 text-left text-sm font-semibold text-zinc-900 dark:border-zinc-700 dark:text-zinc-100">Rijbewijscategorie</th>
                             <th class="border-b border-zinc-300 px-4 py-3 text-left text-sm font-semibold text-zinc-900 dark:border-zinc-700 dark:text-zinc-100">Instructeur naam</th>
+                            <th class="border-b border-zinc-300 px-4 py-3 text-center text-sm font-semibold text-zinc-900 dark:border-zinc-700 dark:text-zinc-100">Wijzigen</th>
                             <th class="border-b border-zinc-300 px-4 py-3 text-center text-sm font-semibold text-zinc-900 dark:border-zinc-700 dark:text-zinc-100">Verwijderen</th>
                         </tr>
                     </thead>
@@ -77,6 +78,11 @@
                                     @endif
                                 </td>
                                 <td class="border-b border-zinc-200 px-4 py-3 text-center dark:border-zinc-800">
+                                    <a href="{{ route('voertuigen.edit', $voertuig->Id) }}" class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-300 bg-white text-lg text-zinc-700 shadow-sm transition hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800" title="Wijzigen" wire:navigate>
+                                        ✎
+                                    </a>
+                                </td>
+                                <td class="border-b border-zinc-200 px-4 py-3 text-center dark:border-zinc-800">
                                     <form action="{{ route('voertuigen.destroy', $voertuig->Id) }}" method="POST" onsubmit="return confirm('Weet u zeker dat u dit voertuig wilt verwijderen?');">
                                         @csrf
                                         @method('DELETE')
@@ -88,7 +94,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="8" class="px-4 py-10 text-center text-sm text-zinc-500 dark:text-zinc-400">Geen voertuigen gevonden.</td>
+                                <td colspan="9" class="px-4 py-10 text-center text-sm text-zinc-500 dark:text-zinc-400">Geen voertuigen gevonden.</td>
                             </tr>
                         @endforelse
                     </tbody>
